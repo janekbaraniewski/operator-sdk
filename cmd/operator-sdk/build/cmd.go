@@ -33,6 +33,7 @@ var (
 	imageBuildArgs string
 	imageBuilder   string
 	goBuildArgs    string
+	buildPlatform	   string
 )
 
 func NewCmd() *cobra.Command {
@@ -57,7 +58,21 @@ For example:
 	buildCmd.Flags().StringVar(&imageBuildArgs, "image-build-args", "", "Extra image build arguments as one string such as \"--build-arg https_proxy=$https_proxy\"")
 	buildCmd.Flags().StringVar(&imageBuilder, "image-builder", "docker", "Tool to build OCI images. One of: [docker, podman, buildah]")
 	buildCmd.Flags().StringVar(&goBuildArgs, "go-build-args", "", "Extra Go build arguments as one string such as \"-ldflags -X=main.xyz=abc\"")
+	buildCmd.Flags().StringVar(&buildPlatform, "build-platform", "", "Specify platform for cross building (only Docker builder supported)")
 	return buildCmd
+}
+
+func createCrossBuildCommand(imageBuilder, context, dockerFile, buildPlatform, image string, imageBuildArgs ...string) (*exec.Cmd, error) {
+	if imageBuilder != "docker" {
+		return nil, fmt.Errorf("%s is not supported image builder for cross building", imageBuilder)
+	}
+
+	var args []string
+	args = append(args, "buildx", "build", "-f", dockerFile, "-t", image, "--platform", buildPlatform, "--load")
+
+	args = parseBuildArgs(args, context, imageBuildArgs)
+
+	return exec.Command(imageBuilder, args...), nil
 }
 
 func createBuildCommand(imageBuilder, context, dockerFile, image string, imageBuildArgs ...string) (*exec.Cmd, error) {
@@ -134,8 +149,13 @@ func buildFunc(cmd *cobra.Command, args []string) error {
 	image := args[0]
 
 	log.Infof("Building OCI image %s", image)
-
-	buildCmd, err := createBuildCommand(imageBuilder, ".", "build/Dockerfile", image, imageBuildArgs)
+	var buildCmd *exec.Cmd
+	var err error
+	if buildPlatform != "" {
+		buildCmd, err = createCrossBuildCommand(imageBuilder, ".", "build/Dockerfile", buildPlatform, image, imageBuildArgs)
+	} else {
+		buildCmd, err = createBuildCommand(imageBuilder, ".", "build/Dockerfile", image, imageBuildArgs)
+	}
 	if err != nil {
 		return err
 	}
