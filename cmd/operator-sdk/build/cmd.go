@@ -71,6 +71,13 @@ func createBuildCommand(imageBuilder, context, dockerFile, image string, imageBu
 		return nil, fmt.Errorf("%s is not supported image builder", imageBuilder)
 	}
 
+	args = parseBuildArgs(args, context, imageBuildArgs)
+
+	return exec.Command(imageBuilder, args...), nil
+}
+
+func parseBuildArgs(args []string, context string, imageBuildArgs []string) []string{
+
 	for _, bargs := range imageBuildArgs {
 		if bargs != "" {
 			splitArgs := strings.Fields(bargs)
@@ -78,9 +85,7 @@ func createBuildCommand(imageBuilder, context, dockerFile, image string, imageBu
 		}
 	}
 
-	args = append(args, context)
-
-	return exec.Command(imageBuilder, args...), nil
+	return append(args, context)
 }
 
 func buildFunc(cmd *cobra.Command, args []string) error {
